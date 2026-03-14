@@ -86,13 +86,14 @@ if __name__ == '__main__':
 
     FEATURES = ['bill_length_mm', 'bill_depth_mm', 'flipper_length_mm', 'body_mass_g']
 
-    if len(sys.argv) > 1:
-        csv_path = sys.argv[1]
+    csv_path = sys.argv[1] if len(sys.argv) > 1 else 'archivo.csv'
+
+    if os.path.exists(csv_path):
         df_input = pd.read_csv(csv_path).dropna(subset=FEATURES).reset_index(drop=True)
+        print(f"CSV cargado: {csv_path} ({len(df_input)} filas)")
     else:
         df_input = _df.copy()
-        print("Uso: python main.py <archivo.csv>")
-        print("No se proporcionó CSV, usando el dataset interno de Palmer Penguins.\n")
+        print(f"'{csv_path}' no encontrado, usando el dataset interno de Palmer Penguins ({len(df_input)} filas).")
 
     preds_humano = [
         clasificador_humano(r.bill_length_mm, r.bill_depth_mm, r.flipper_length_mm, r.body_mass_g)
@@ -103,32 +104,18 @@ if __name__ == '__main__':
         for _, r in df_input.iterrows()
     ]
 
-    df_humano = df_input.copy()
-    df_humano['species'] = preds_humano
+    df_resultados = pd.DataFrame({
+        'prediccion_humano': preds_humano,
+        'prediccion_ml':     preds_ml,
+    })
 
-    df_ml = df_input.copy()
-    df_ml['species'] = preds_ml
+    base = os.path.splitext(os.path.basename(csv_path))[0]
+    out_path = f'resultados_{base}.csv'
+    df_resultados.to_csv(out_path, index=False)
+    print(f"Resultados guardados en: {out_path}")
 
-    # Asegurar que species sea la primera columna, igual que el dataset original
-    other_cols = [c for c in df_humano.columns if c != 'species']
-    df_humano = df_humano[['species'] + other_cols]
-    df_ml = df_ml[['species'] + other_cols]
-
-    base = os.path.splitext(os.path.basename(sys.argv[1]))[0] if len(sys.argv) > 1 else 'penguins'
-    out_humano = f'resultados_humano_{base}.csv'
-    out_ml = f'resultados_ml_{base}.csv'
-
-    df_humano.to_csv(out_humano, index=False)
-    df_ml.to_csv(out_ml, index=False)
-
-    print(f"Resultados guardados en:")
-    print(f"  {out_humano}  ({len(df_humano)} filas)")
-    print(f"  {out_ml}  ({len(df_ml)} filas)")
-
-    has_labels = 'species' in pd.read_csv(sys.argv[1] if len(sys.argv) > 1 else '').columns if len(sys.argv) > 1 else True
-
-    if has_labels or len(sys.argv) == 1:
-        y_true = _df['species'].tolist() if len(sys.argv) == 1 else pd.read_csv(sys.argv[1]).dropna(subset=FEATURES)['species'].tolist()
+    if 'species' in df_input.columns:
+        y_true = df_input['species'].tolist()
 
         def metricas(y_true, y_pred):
             return {
